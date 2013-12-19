@@ -1,0 +1,296 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+ <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Tool Matching:Scatter</title>
+    <link href="layout.css" rel="stylesheet" type="text/css">
+    <!--[if lte IE 8]><script language="javascript" type="text/javascript" src="../flot/excanvas.min.js"></script><![endif]-->
+    <script language="javascript" type="text/javascript" src="../flot/jquery.js"></script>
+    <script language="javascript" type="text/javascript" src="../flot/jquery.flot.js"></script>
+    <script language="javascript" type="text/javascript" src="../flot/jquery.flot.resize.js"></script>
+    <style type="text/css">
+    html, body {
+        height: 100%; /* make the percentage height on placeholder work */
+    }
+    .message {
+        padding-left: 50px;
+        font-size: smaller;
+    }
+    </style>
+
+ </head>
+    <body>
+    <h1> <div id="PartType"></div>
+    Scatter Plot</h1>
+     <p>
+     <select id="DSIDchoice" name="DSIDchoice">
+     </select>
+     
+     <select id="PIDchoice" name="PIDchoice">  
+     </select>
+     
+     <select id="BINchoice" name="BINchoice">
+     </select>
+     
+     <button id="PlotIt" type="button">Plot</button>
+     </p>
+
+
+    
+    <div id="placeholder" style="width:100%;height:60%;"></div>
+    <p id="choices"></p>
+
+<script type="text/javascript">
+$(function () {
+
+    var placeholder = $("#placeholder");
+    var data = [];
+    var tester_list = [];
+    $('#DSIDchoice').click(function(){ kickoffPIDs();});
+    $('#PIDchoice').click(function(){ kickoffOthers();});
+    $('#PlotIt').click(function(){ plotAccordingToChoices();});
+
+     function showTooltip(x, y, contents) {
+        $('<div id="tooltip">' + contents + '</div>').css( {
+            position: 'absolute',
+            display: 'none',
+            top: y + 5,
+            left: x + 5,
+            border: '1px solid #fdd',
+            padding: '2px',
+            'background-color': '#fee',
+            opacity: 0.80
+        }).appendTo("body").fadeIn(200);
+    }
+
+    var previousPoint = null;
+    $("#placeholder").bind("plothover", function (event, pos, item) {
+    	if (data.length > 0) {
+            $("#x").text(pos.x.toFixed(2));
+            $("#y").text(pos.y.toFixed(2));
+ 
+            if (item) {
+	        var theSelection = document.getElementById("BINchoice");	
+	        var bin = theSelection.options[theSelection.selectedIndex].value;
+                if (previousPoint != item.dataIndex) {
+                    previousPoint = item.dataIndex;
+                    
+
+                    $("#tooltip").remove();
+                    var x = item.datapoint[0].toFixed(0),
+                        y = item.datapoint[1].toFixed(1);
+		    var v = item.series.data;
+        	    var n = x.toString();
+	            var year = n.substr(0,4);
+	            var month = n.substr(4,2);
+	            var day = n.substr(6,2);
+                    showTooltip(item.pageX, item.pageY,
+                                item.series.label + " " + y + " counts on " + x + " wafers");
+                }
+            }
+            else {
+                $("#tooltip").remove();
+                previousPoint = null;            
+            }
+	}
+    });
+
+//No clicking, not sure what to show...    
+//    $("#placeholder").bind("plotclick", function (event, pos, item) {
+//        if (item) {
+//	    var x = item.datapoint[0].toFixed(0),
+//                y = item.datapoint[1].toFixed(1);
+//	    var theSelection = document.getElementById("DSIDchoice");	
+//	    var dsid = theSelection.options[theSelection.selectedIndex].value;
+//            theSelection = document.getElementById("BINchoice");	
+//	    var bin = theSelection.options[theSelection.selectedIndex].value;
+//    	    var n = x.toString();
+//	    var year = n.substr(0,4);
+//	    var month = n.substr(4,2);
+//	    var day = n.substr(6,2);
+//    	    var thelink = "http://10.110.12.41/xampp/mapper/map.php?table=%60tm_" + year + "-" + month + "-" + day + "_" + dsid + "%60&first=true&tm_bin=" + bin + "&tm_tool=" +
+//	    item.series.label;// + "%200";
+//            window.open(thelink,'','width=600,resizable=yes,scrollbars=yes')
+//            //$("#clickdata").text("<a href=\"" + thelink + "\">Map</a>");
+//        }
+//    });
+    
+    function plotAccordingToChoices() {
+        data = [];
+	var key = "";
+	var theSelection = document.getElementById("DSIDchoice");	
+        var dsid = theSelection.options[theSelection.selectedIndex].value;
+        theSelection = document.getElementById("BINchoice");	
+	var bin = theSelection.options[theSelection.selectedIndex].value;
+	theSelection = document.getElementById("PIDchoice");	
+	var pid = theSelection.options[theSelection.selectedIndex].value;	
+
+	var ptDisp = $("#PartType");
+    	ptDisp.text(dsid + " Bin " + bin + " " + pid + " ");
+
+        for(var i = 0; i < tester_list.length; i++) {	    
+	    // find the URL in the link right next to us
+	    var key = tester_list[i][0];
+	    //alert(key);
+	    var dataurl = "scatter_ex.php?mode=ext&dsid=" + dsid + "&tester=" + key + "&pid=" + pid + "&bin=" + bin;
+	    $.ajax({
+                url: dataurl,
+                method: 'POST',
+		data: "",
+                dataType: 'json',
+		async: true,
+                success: onDataReceived,
+		OnFailure : handleError
+            });
+	 
+	
+        }
+	
+    }
+    function handleError(ajaxContext) {
+        var response = ajaxContext.get_response();
+        var statusCode = response.get_statusCode();
+        alert("Sorry, the request failed with status code " + statusCode);
+        }
+
+    function onDataReceived(series) {
+        // let's add it to our current data
+        if (series.data.length > 0) { data.push(series); }
+      	$.plot($("#placeholder"), data, {
+	    	series: {
+              	lines: { show: false },
+              	points: { show: true }
+            	},
+            	xaxis: {  tickDecimals: 0 },
+	    	grid: { hoverable: true, clickable: false, backgroundColor: { colors: ["#fff", "#eee"] }},
+	    	legend: { noColumns: 3, position: "nw"}
+        });
+	    
+        }
+
+////////// Hit the Datbase for freaking EVERYTHING! //////////
+   
+    function initDSIDs() {
+    	    var dataurl = "scatter_ex.php?mode=dsids";
+	    $.ajax({
+                url: dataurl,
+                method: 'POST',
+		data: "",
+                dataType: 'json',
+		async: true,
+                cache: false,		
+                success: onDataReceivedDSIDs,
+		OnFailure : handleError
+            });
+    
+    }
+    function onDataReceivedDSIDs(series) {
+    
+    var theSelection = document.getElementById("DSIDchoice");
+    for(i=0; i< series.data.length; i++)
+        {
+        var option=document.createElement("option");
+        option.text = series.data[i][0];
+	option.value = series.data[i][0];
+	
+        try { theSelection.add(option,x.options[null]);}
+        catch (e) { theSelection.add(option);}
+        }
+    }
+    
+    function kickoffPIDs() {
+	var theSelection = document.getElementById("DSIDchoice");	
+        var dsid = theSelection.options[theSelection.selectedIndex].value;
+	initPID(dsid);
+        }    
+    function initPID(theDSID) {
+    	    var dataurl = "scatter_ex.php?mode=getpids&dsid=" + theDSID;
+	    $.ajax({
+                url: dataurl,
+                method: 'POST',
+		data: "",
+                dataType: 'json',
+		async: true,
+		cache: false,
+                success: onDataReceivedPID,
+		OnFailure : handleError
+            });
+    
+    }
+    function onDataReceivedPID(series) {
+    var theSelection = document.getElementById("PIDchoice");
+    theSelection.options.length = 0;
+    for(i=0; i< series.data.length; i++)
+        {
+        var option=document.createElement("option");
+        option.text = series.data[i][0];
+	option.value = series.data[i][0];
+	
+        try { theSelection.add(option,x.options[null]);}
+        catch (e) { theSelection.add(option);}
+        }
+    }
+    function kickoffOthers() {
+	var theSelection = document.getElementById("DSIDchoice");	
+        var dsid = theSelection.options[theSelection.selectedIndex].value;
+	var theSelection = document.getElementById("PIDchoice");	
+        var pid = theSelection.options[theSelection.selectedIndex].value;
+	initBins(dsid,pid);
+	initTesters(dsid,pid);
+        }            
+    function initBins(theDSID,thePID) {
+    	    var dataurl = "scatter_ex.php?mode=bins&dsid=" + theDSID + "&pid=" + thePID;
+	    $.ajax({
+                url: dataurl,
+                method: 'POST',
+		data: "",
+                dataType: 'json',
+		async: true,
+		cache: false,
+                success: onDataReceivedBins,
+		OnFailure : handleError
+            });
+    
+    }
+    function onDataReceivedBins(series) {
+    var theSelection = document.getElementById("BINchoice");
+    theSelection.options.length = 0;    
+    for(i=0; i< series.data.length; i++)
+        {
+        var option=document.createElement("option");
+        option.text = series.data[i][0];
+	option.value = series.data[i][0];
+	
+        try { theSelection.add(option,x.options[null]);}
+        catch (e) { theSelection.add(option);}
+        }
+    }
+    function initTesters(theDSID,thePID) {
+    	    var dataurl = "scatter_ex.php?mode=testers&dsid=" + theDSID + "&pid=" + thePID;
+	    $.ajax({
+                url: dataurl,
+                method: 'POST',
+		data: "",
+                dataType: 'json',
+		async: true,
+		cache: false,
+                success: onDataReceivedTesters,
+		OnFailure : handleError
+            });
+    
+    }
+    function onDataReceivedTesters(series) {
+        tester_list = series.data;
+    }    
+    
+////////// Through suffering the price of dynamic everything... //////////
+
+    initDSIDs(); //Get the DSIDs on load
+
+    
+    
+});
+</script>
+
+ </body>
+</html>
